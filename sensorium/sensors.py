@@ -265,12 +265,12 @@ class ProcPid (Sensor):
 		top_ps_cpu.sort(key = key_op, reverse = True)
 		top_ps_mem.sort(key = key_op, reverse = True)
 		
-		lnbr = '<br/>'  # '\n' doesn't work because of html in grafana
+		br = '<br/>'  # '\n' doesn't work because it gets rendered as html in grafana
 		fields = [
-			('top.mem.rss', lnbr.join('%s %s' % ((v_rss * SC_PAGESIZE) / MiB, self.prev_counters[pid][2]) for v_rss, pid in top_ps_mem[:self.top_limit])),
+			('top.mem.rss', br.join('%s %s %s' % ((v_rss * SC_PAGESIZE) / MiB, pid, self.prev_counters[pid][2]) for v_rss, pid in top_ps_mem[:self.top_limit])),
 		]
 		if top_ps_cpu:
-			fields.append(('top.cpu.total', lnbr.join('%s %s' % (v_cpu, self.prev_counters[pid][2]) for v_cpu, pid in top_ps_cpu[:self.top_limit])))
+			fields.append(('top.cpu.total', br.join('%s %s %s' % (v_cpu, pid, self.prev_counters[pid][2]) for v_cpu, pid in top_ps_cpu[:self.top_limit])))
 		metrics.append(('top_processes', (), fields))
 
 class Statvfs (Sensor):
