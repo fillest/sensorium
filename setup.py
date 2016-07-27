@@ -3,7 +3,7 @@ import setuptools
 
 setuptools.setup(
 	name = 'sensorium',
-	version = '0.23',
+	version = '0.24',
 	packages = ['sensorium'],
 	zip_safe = False,
 	entry_points = {

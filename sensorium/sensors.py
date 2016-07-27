@@ -3,7 +3,6 @@ import subprocess
 import logging
 import operator
 import errno
-import string
 import requests
 import requests.exceptions
 from sensorium import Sensor
@@ -172,9 +171,11 @@ class ProcStat (Sensor):
 
 		self.is_first_sample = False
 
-DIGITS = set(string.digits)
 SC_PAGESIZE = os.sysconf(os.sysconf_names['SC_PAGESIZE'])
 MiB = 1024 * 1024
+key_op = operator.itemgetter(0)
+br = '<br/>'  # '\n' doesn't work because it gets rendered as html in grafana
+index_offset = 1 + 2  #1 is because manual is 1-based and 2 is because 'rest' starts from 3rd column
 #TODO check atop >It shows the resource consumption by all processes that were active during the interval, so also the resource consumption by those processes that have finished during the interval.
 #TODO check out https://www.kernel.org/doc/Documentation/accounting/taskstats.txt + https://lwn.net/Articles/414875/ + https://github.com/uber-common/cpustat (!) + https://github.com/facebook/gnlpy
 #http://manpages.ubuntu.com/manpages/trusty/man5/proc.5.html
@@ -193,79 +194,78 @@ class ProcPid (Sensor):
 	def work (self, metrics):
 		top_ps_cpu = []
 		top_ps_mem = []
+
 		for pid in os.listdir('/proc/'):
-			if pid[0] in DIGITS:
+			if pid.isdigit():
 				try:
-					fd = os.open('/proc/%s/stat' % pid, os.O_RDONLY)
+					fd = os.open('/proc/' + pid + '/stat', os.O_RDONLY)
 				except OSError as e:
 					if e.errno == errno.ENOENT or e.errno == errno.ESRCH:
 						continue
-					else:
-						raise
+					raise
 				try:
 					raw = os.read(fd, 1024)
 				except OSError as e:
 					if e.errno == errno.ESRCH:
 						continue
-					else:
-						raise
+					raise
 				finally:
 					os.close(fd)
 				h, t = raw.split(') ', 1)  #second column may have spaces
 				title = h.split('(', 1)[1]
 				rest = t.split(' ')  #starts from 3rd column
-				assert len(rest) == 50, (len(rest), rest)
-				starttime = rest[22 - 1 - 2]
+				if len(rest) != 50:
+					raise Exception(rest)
+				starttime = rest[22 - index_offset]
 
-				try:
-					fd = os.open('/proc/%s/cmdline' % pid, os.O_RDONLY) #TODO read only if starttime changed
-				except OSError as e:
-					if e.errno == errno.ENOENT or e.errno == errno.ESRCH:
-						continue
-					else:
-						raise
-				try:
-					cmdline = os.read(fd, 1024)
-				except OSError as e:
-					if e.errno == errno.ESRCH:
-						continue
-					else:
-						raise
-				finally:
-					os.close(fd)
-
-				try:
-					exepath = os.readlink('/proc/%s/exe' % pid)
-				except OSError as e:
-					if e.errno == 13:
-						exepath = '?'
-					elif e.errno == errno.ENOENT or e.errno == errno.ESRCH:
-						continue
-					else:
-						raise
-
-				v_title = cmdline.split('\x00')[0] or title or exepath
-
-				index_offset = 1 + 2  #1 is because manual is 1-based and 2 is because 'rest' starts from 3rd column
-				# v_majflt = int(rest[12 - index_offset])
 				v_utime = int(rest[14 - index_offset])
 				v_stime = int(rest[15 - index_offset])
 				v_cpu = v_utime + v_stime
+				# v_majflt = int(rest[12 - index_offset])
+
+				prev = self.prev_counters.get(pid)
+				if prev is not None and starttime == prev[0]:
+					diff_cpu = v_cpu - prev[1]
+					if diff_cpu:
+						top_ps_cpu.append((diff_cpu, pid))
+					prev[1] = v_cpu
+				else:
+					try:
+						fd = os.open('/proc/' + pid + '/cmdline', os.O_RDONLY)
+					except OSError as e:
+						if e.errno == errno.ENOENT or e.errno == errno.ESRCH:
+							continue
+						raise
+					try:
+						cmdline = os.read(fd, 1024)
+					except OSError as e:
+						if e.errno == errno.ESRCH:
+							continue
+						raise
+					finally:
+						os.close(fd)
+					v_title = cmdline.split('\x00')[0] or title
+					if not v_title:
+						try:
+							exepath = os.readlink('/proc/' + pid + '/exe')
+						except OSError as e:
+							if e.errno == errno.EACCES:
+								exepath = '?'
+							elif e.errno == errno.ENOENT or e.errno == errno.ESRCH:
+								continue
+							else:
+								raise
+						v_title = exepath
+
+					self.prev_counters[pid] = [starttime, v_cpu, v_title]
+					#possible pid value space is limited and quite small so we can avoid cleaning dead pids
+
 				v_rss = int(rest[24 - index_offset])
-				if pid in self.prev_counters:  #removing 
-					starttime_prev, v_cpu_prev, _v_title = self.prev_counters[pid]
-					if starttime == starttime_prev:
-						dif = v_cpu - v_cpu_prev
-						if dif:
-							top_ps_cpu.append((dif, pid))
-				self.prev_counters[pid] = (starttime, v_cpu, v_title)
 				top_ps_mem.append((v_rss, pid))
-		
-		key_op = operator.itemgetter(0)
+
 		top_ps_cpu.sort(key = key_op, reverse = True)
 		top_ps_mem.sort(key = key_op, reverse = True)
 		
-		br = '<br/>'  # '\n' doesn't work because it gets rendered as html in grafana
 		fields = [
 			('top.mem.rss', br.join('%s %s %s' % ((v_rss * SC_PAGESIZE) / MiB, pid, self.prev_counters[pid][2]) for v_rss, pid in top_ps_mem[:self.top_limit])),
 		]
