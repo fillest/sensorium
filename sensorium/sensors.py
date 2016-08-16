@@ -195,6 +195,7 @@ class ProcPid (Sensor):
 		top_ps_cpu = []
 		top_ps_mem = []
 
+		dead_pids = set(self.prev_counters.viewkeys())
 		for pid in os.listdir('/proc/'):
 			if pid.isdigit():
 				try:
@@ -225,6 +226,7 @@ class ProcPid (Sensor):
 
 				prev = self.prev_counters.get(pid)
 				if prev is not None and starttime == prev[0]:
+					dead_pids.remove(pid)
 					diff_cpu = v_cpu - prev[1]
 					if diff_cpu:
 						top_ps_cpu.append((diff_cpu, pid))
@@ -258,7 +260,8 @@ class ProcPid (Sensor):
 						v_title = exepath
 
 					self.prev_counters[pid] = [starttime, v_cpu, v_title]
-					#possible pid value space is limited and quite small so we can avoid cleaning dead pids
+					if prev is not None:
+						dead_pids.remove(pid)
 
 				v_rss = int(rest[24 - index_offset])
 				top_ps_mem.append((v_rss, pid))
@@ -272,6 +275,9 @@ class ProcPid (Sensor):
 		if top_ps_cpu:
 			fields.append(('top.cpu.total', br.join('%s %s %s' % (v_cpu, pid, self.prev_counters[pid][2]) for v_cpu, pid in top_ps_cpu[:self.top_limit])))
 		metrics.append(('top_processes', (), fields))
+
+		for pid in dead_pids:
+			del self.prev_counters[pid]
 
 class Statvfs (Sensor):
 	def __init__ (self, settings):
