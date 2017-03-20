@@ -11,8 +11,7 @@ from sensorium import Sensor
 logger = logging.getLogger(__name__)
 
 
-bufmax = 1024 * 4  #typical actual length is about 1kb
-def reread (fd):
+def reread (fd, bufmax = 1024 * 4): #typical actual length is about 1kb
 	os.lseek(fd, 0, os.SEEK_SET)
 	buf = os.read(fd, bufmax)
 	if not (len(buf) < bufmax):
@@ -116,7 +115,7 @@ class ProcStat (Sensor):
 		# debugbuf = []
 	
 	def work (self, metrics):
-		buf = reread(self.fd)
+		buf = reread(self.fd, 1024 * 4 * 2)
 		# debugbuf.append((t_start, buf))
 
 		busiest_core_util = None
