@@ -201,7 +201,7 @@ def serialize_value (v, fields):
 	elif isinstance(v, float):
 		return str(v)
 	elif isinstance(v, basestring):
-		return '"%s"' % v #TODO escape? https://docs.influxdata.com/influxdb/v0.12/write_protocols/write_syntax/#data-types
+		return '"%s"' % v.replace('"', '\\"')
 	else:
 		raise Exception('%s %s %s' % (type(v), repr(v), fields))
 
