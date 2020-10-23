@@ -115,7 +115,7 @@ class ProcStat (Sensor):
 		# debugbuf = []
 	
 	def work (self, metrics):
-		buf = reread(self.fd, 1024 * 4 * 2)
+		buf = reread(self.fd, 8192 * 2) #8192 was not enough on 64(32) cores
 		# debugbuf.append((t_start, buf))
 
 		busiest_core_util = None
