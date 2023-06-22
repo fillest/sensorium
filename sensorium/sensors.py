@@ -73,11 +73,11 @@ class ProcDiskstats (Sensor):
 			if name in self.names:
 				cur_counters = map(int, parts[3:])
 				(reads_completed, reads_merged, sectors_read, ms_spent_reading, writes_completed, writes_merged, sectors_written,
-					ms_spent_writing, reqs_in_progress, ms_spent_doing_ios, weighted_ms_spent_doing_ios) = cur_counters
+					ms_spent_writing, reqs_in_progress, ms_spent_doing_ios, weighted_ms_spent_doing_ios) = cur_counters[:11]
 				if not self.is_first_sample:
 					diff_since_prev = map(operator.sub, cur_counters, self.prev_counters[name])
 					(reads_completed, reads_merged, sectors_read, ms_spent_reading, writes_completed, writes_merged, sectors_written,
-						ms_spent_writing, _, ms_spent_doing_ios, weighted_ms_spent_doing_ios) = diff_since_prev
+						ms_spent_writing, _, ms_spent_doing_ios, weighted_ms_spent_doing_ios) = diff_since_prev[:11]
 					metrics.append(('disk_io_stats', (('name', name),), (
 						('reqs_in_progress_sample', reqs_in_progress),
 						('reads_completed', reads_completed),
